@@ -439,8 +439,7 @@
 
     Pikaday.rangeDisabled = function(date, opts) {
         return opts.minDate && date < opts.minDate || opts.maxDate && date > opts.maxDate;
-    }
-
+    };
 
     /**
      * public Pikaday API
