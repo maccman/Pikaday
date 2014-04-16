@@ -380,11 +380,6 @@
             if (!hasClass(target, 'is-disabled')) {
                 if (hasClass(target, 'pika-button') && !hasClass(target, 'is-empty')) {
                     self.setDate(new Date(target.getAttribute('data-pika-year'), target.getAttribute('data-pika-month'), target.getAttribute('data-pika-day')));
-                    if (opts.bound) {
-                        sto(function() {
-                            self.hide();
-                        }, 100);
-                    }
                     return;
                 }
                 else if (hasClass(target, 'pika-prev')) {
@@ -421,94 +416,11 @@
             }
         };
 
-        self._onInputChange = function(e)
-        {
-            var date;
-
-            if (e.firedBy === self) {
-                return;
-            }
-            if (hasMoment) {
-                date = moment(opts.field.value, opts.format);
-                date = (date && date.isValid()) ? date.toDate() : null;
-            }
-            else {
-                date = new Date(Date.parse(opts.field.value));
-            }
-            self.setDate(isDate(date) ? date : null);
-            if (!self._v) {
-                self.show();
-            }
-        };
-
-        self._onInputFocus = function()
-        {
-            self.show();
-        };
-
-        self._onInputClick = function()
-        {
-            self.show();
-        };
-
-        self._onInputBlur = function()
-        {
-            if (!self._c) {
-                self._b = sto(function() {
-                    self.hide();
-                }, 50);
-            }
-            self._c = false;
-        };
-
-        self._onClick = function(e)
-        {
-            e = e || window.event;
-            var target = e.target || e.srcElement,
-                pEl = target;
-            if (!target) {
-                return;
-            }
-            if (!hasEventListeners && hasClass(target, 'pika-select')) {
-                if (!target.onchange) {
-                    target.setAttribute('onchange', 'return;');
-                    addEvent(target, 'change', self._onChange);
-                }
-            }
-            do {
-                if (hasClass(pEl, 'pika-single')) {
-                    return;
-                }
-            }
-            while ((pEl = pEl.parentNode));
-            if (self._v && target !== opts.trigger) {
-                self.hide();
-            }
-        };
-
         self.el = document.createElement('div');
         self.el.className = 'pika-single' + (opts.isRTL ? ' is-rtl' : '');
 
         addEvent(self.el, 'mousedown', self._onMouseDown, true);
         addEvent(self.el, 'change', self._onChange);
-
-        if (opts.field) {
-            if (opts.bound) {
-                document.body.appendChild(self.el);
-            } else {
-                opts.field.parentNode.insertBefore(self.el, opts.field.nextSibling);
-            }
-            addEvent(opts.field, 'change', self._onInputChange);
-
-            if (!opts.defaultDate) {
-                if (hasMoment && opts.field.value) {
-                    opts.defaultDate = moment(opts.field.value, opts.format).toDate();
-                } else {
-                    opts.defaultDate = new Date(Date.parse(opts.field.value));
-                }
-                opts.setDefaultDate = true;
-            }
-        }
 
         var defDate = opts.defaultDate;
 
@@ -522,17 +434,12 @@
             self.gotoDate(new Date());
         }
 
-        if (opts.bound) {
-            this.hide();
-            self.el.className += ' is-bound';
-            addEvent(opts.trigger, 'click', self._onInputClick);
-            addEvent(opts.trigger, 'focus', self._onInputFocus);
-            addEvent(opts.trigger, 'blur', self._onInputBlur);
-        } else {
-            this.show();
-        }
-
+        this.show();
     };
+
+    Pikaday.rangeDisabled = function(date, opts) {
+        return opts.minDate && date < opts.minDate || opts.maxDate && date > opts.maxDate;
+    }
 
 
     /**
@@ -554,11 +461,9 @@
 
             opts.isRTL = !!opts.isRTL;
 
-            opts.field = (opts.field && opts.field.nodeName) ? opts.field : null;
-
-            opts.bound = !!(opts.bound !== undefined ? opts.field && opts.bound : opts.field);
-
             opts.trigger = (opts.trigger && opts.trigger.nodeName) ? opts.trigger : opts.field;
+
+            opts.isDisabled = opts.isDisabled || Pikaday.rangeDisabled;
 
             var nom = parseInt(opts.numberOfMonths, 10) || 1;
             opts.numberOfMonths = nom > 4 ? 4 : nom;
@@ -803,14 +708,6 @@
 
             this.el.innerHTML = html;
 
-            if (opts.bound) {
-                if(opts.field.type !== 'hidden') {
-                    sto(function() {
-                        opts.trigger.focus();
-                    }, 1);
-                }
-            }
-
             if (typeof this._o.onDraw === 'function') {
                 var self = this;
                 sto(function() {
@@ -892,7 +789,7 @@
             for (var i = 0, r = 0; i < cells; i++)
             {
                 var day = new Date(year, month, 1 + (i - before)),
-                    isDisabled = (opts.minDate && day < opts.minDate) || (opts.maxDate && day > opts.maxDate),
+                    isDisabled = opts.isDisabled(day, opts),
                     isSelected = isDate(this._d) ? compareDates(day, this._d) : false,
                     isToday = compareDates(day, now),
                     isEmpty = i < before || i >= (days + before);
@@ -919,10 +816,7 @@
                 removeClass(this.el, 'is-hidden');
                 this._v = true;
                 this.draw();
-                if (this._o.bound) {
-                    addEvent(document, 'click', this._onClick);
-                    this.adjustPosition();
-                }
+
                 if (typeof this._o.onOpen === 'function') {
                     this._o.onOpen.call(this);
                 }
@@ -933,9 +827,6 @@
         {
             var v = this._v;
             if (v !== false) {
-                if (this._o.bound) {
-                    removeEvent(document, 'click', this._onClick);
-                }
                 this.el.style.cssText = '';
                 addClass(this.el, 'is-hidden');
                 this._v = false;
@@ -951,16 +842,10 @@
         destroy: function()
         {
             this.hide();
+
             removeEvent(this.el, 'mousedown', this._onMouseDown, true);
             removeEvent(this.el, 'change', this._onChange);
-            if (this._o.field) {
-                removeEvent(this._o.field, 'change', this._onInputChange);
-                if (this._o.bound) {
-                    removeEvent(this._o.trigger, 'click', this._onInputClick);
-                    removeEvent(this._o.trigger, 'focus', this._onInputFocus);
-                    removeEvent(this._o.trigger, 'blur', this._onInputBlur);
-                }
-            }
+
             if (this.el.parentNode) {
                 this.el.parentNode.removeChild(this.el);
             }
